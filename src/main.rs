@@ -117,11 +117,11 @@ fn player_movement_system(
 
         let check_x = transform.translation.x + x;
         let check_y = transform.translation.y + y;
-        if check_x < -GAME_WIDTH / 2. + WALL_WIDTH ||check_x > GAME_WIDTH / 2. - WALL_WIDTH {
+        if !(-GAME_WIDTH / 2. + WALL_WIDTH..=GAME_WIDTH / 2. - WALL_WIDTH).contains(&check_x) {
             x = 0.;
         }
 
-        if check_y < -GAME_HEIGHT / 2. + WALL_HEIGHT || check_y > GAME_HEIGHT / 2. - WALL_HEIGHT {
+        if !(-GAME_HEIGHT / 2. + WALL_HEIGHT..=GAME_HEIGHT / 2. - WALL_HEIGHT).contains(&check_y) {
             y = 0.;
         }
         velocity.x = x;
@@ -141,7 +141,7 @@ fn spaw_player_projectile(
             .spawn_bundle(SpriteBundle {
                 texture: global_assets.projectile2.clone(),
                 transform: Transform {
-                    translation: transform_player.translation.clone(),
+                    translation: transform_player.translation,
                     scale: Vec3::new(0.05, 0.05, 0.),
                     ..Default::default()
                 },
@@ -151,4 +151,3 @@ fn spaw_player_projectile(
             .insert(Velocity { x: 0., y: 1. });
     }
 }
-
