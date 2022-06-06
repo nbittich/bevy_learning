@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use rand::Rng;
 
 pub const CLEAR: Color = Color::rgb(0.1, 0.1, 0.1);
 
@@ -10,8 +11,13 @@ pub const WALL_HEIGHT: f32 = 80.;
 pub const BASE_SPEED: f32 = 400.;
 pub const TIME_STEP: f32 = 1. / 60.;
 
+pub const MAX_ENNEMIES: usize = 3;
+
 #[derive(Component)]
 pub struct Player;
+
+#[derive(Component)]
+pub struct Ennemy;
 #[derive(Component)]
 pub struct PlayerProjectile;
 
@@ -20,9 +26,14 @@ pub struct Velocity {
     x: f32,
     y: f32,
 }
+#[derive(Default)]
+pub struct SpawnEnnemyConfig {
+    timer: Timer,
+}
 
 pub struct GlobalAssets {
     pub spaceship: Handle<Image>,
+    pub alien: Handle<Image>,
     pub projectile2: Handle<Image>,
 }
 
@@ -38,12 +49,17 @@ fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
-        .add_plugin(bevy_svg::prelude::SvgPlugin)
         .add_startup_system_to_stage(StartupStage::PreStartup, setup_system)
         .add_startup_system_to_stage(StartupStage::PostStartup, spawn_player_system)
         .add_system(player_movement_system)
         .add_system(movement_system)
         .add_system(spaw_player_projectile)
+        .add_system(spawn_ennemy)
+        .add_system(ennemy_movement)
+        .add_system(despawn_out_screen)
+        .insert_resource(SpawnEnnemyConfig {
+            timer: Timer::from_seconds(2., true),
+        })
         .run();
 }
 
@@ -51,6 +67,7 @@ fn setup_system(mut commands: Commands, assets_server: Res<AssetServer>) {
     let camera = OrthographicCameraBundle::new_2d();
     commands.insert_resource(GlobalAssets {
         spaceship: assets_server.load("spaceship.png"),
+        alien: assets_server.load("alien.png"),
         projectile2: assets_server.load("projectile2.png"),
     });
     commands.spawn_bundle(camera);
@@ -117,6 +134,8 @@ fn player_movement_system(
 
         let check_x = transform.translation.x + x;
         let check_y = transform.translation.y + y;
+
+        // todo this is dumb
         if !(-GAME_WIDTH / 2. + WALL_WIDTH..=GAME_WIDTH / 2. - WALL_WIDTH).contains(&check_x) {
             x = 0.;
         }
@@ -124,6 +143,7 @@ fn player_movement_system(
         if !(-GAME_HEIGHT / 2. + WALL_HEIGHT..=GAME_HEIGHT / 2. - WALL_HEIGHT).contains(&check_y) {
             y = 0.;
         }
+
         velocity.x = x;
         velocity.y = y;
     }
@@ -149,5 +169,56 @@ fn spaw_player_projectile(
             })
             .insert(PlayerProjectile)
             .insert(Velocity { x: 0., y: 1. });
+    }
+}
+
+fn spawn_ennemy(
+    mut commands: Commands,
+    assets: Res<GlobalAssets>,
+    time: Res<Time>,
+    mut config: ResMut<SpawnEnnemyConfig>,
+    query_ennemies: Query<&Ennemy>,
+) {
+    config.timer.tick(time.delta());
+    let ennemies_already_spawned: usize = query_ennemies.iter().count();
+    if config.timer.finished() && ennemies_already_spawned < MAX_ENNEMIES {
+        let rand_w = rand::thread_rng()
+            .gen_range(-GAME_WIDTH / 2. + WALL_HEIGHT..GAME_WIDTH / 2. - WALL_HEIGHT);
+        commands
+            .spawn_bundle(SpriteBundle {
+                texture: assets.alien.clone(),
+                transform: Transform {
+                    translation: Vec3::new(rand_w , GAME_HEIGHT, 10.),
+                    scale: Vec3::new(0.5, 0.5, 0.),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .insert(Ennemy)
+            .insert(Velocity { x: 0., y: -0.3 });
+    }
+}
+
+fn despawn_out_screen(mut commands: Commands, query_velocity: Query<(Entity, &Transform)>) {
+    for (ent, transform) in query_velocity.iter() {
+        if transform.translation.y < -GAME_HEIGHT || transform.translation.y > GAME_HEIGHT {
+            commands.entity(ent).despawn();
+        }
+    }
+}
+fn ennemy_movement(
+    query_player: Query<&Transform, With<Player>>,
+    mut query_ennemy: Query<(&mut Velocity, &Transform), With<Ennemy>>,
+) {
+    let player_transform = query_player.single();
+    for (mut velocity, transform) in query_ennemy.iter_mut() {
+        if transform.translation.x.ceil() > player_transform.translation.x.ceil() {
+            velocity.x = -1.;
+        } else if transform.translation.x.ceil() < player_transform.translation.x.ceil() {
+            velocity.x = 1.;
+        } else {
+            velocity.x = 0.;
+        }
+        //  velocity.y = -rand::thread_rng().gen_range(0. .. 1.);
     }
 }

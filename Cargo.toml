@@ -11,4 +11,5 @@ opt-level = 3
 [dependencies]
 bevy = { version = "0.7.0", features = ["dynamic"] }
 bevy_svg = { version = "0.7", default-features = false, features = ["2d" ]}
+rand = "0.8.5"
 
