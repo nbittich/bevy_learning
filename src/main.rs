@@ -12,6 +12,8 @@ pub const TIME_STEP: f32 = 1. / 60.;
 
 #[derive(Component)]
 pub struct Player;
+#[derive(Component)]
+pub struct PlayerProjectile;
 
 #[derive(Component, Default)]
 pub struct Velocity {
@@ -21,11 +23,12 @@ pub struct Velocity {
 
 pub struct GlobalAssets {
     pub spaceship: Handle<Image>,
+    pub projectile2: Handle<Image>,
 }
 
 fn main() {
     App::new()
-        .insert_resource(ClearColor(CLEAR))
+        // .insert_resource(ClearColor(CLEAR))
         .insert_resource(WindowDescriptor {
             width: GAME_WIDTH,
             height: GAME_HEIGHT,
@@ -36,10 +39,11 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_plugin(bevy_svg::prelude::SvgPlugin)
-        .add_startup_system(setup_system)
+        .add_startup_system_to_stage(StartupStage::PreStartup, setup_system)
         .add_startup_system_to_stage(StartupStage::PostStartup, spawn_player_system)
         .add_system(player_movement_system)
         .add_system(movement_system)
+        .add_system(spaw_player_projectile)
         .run();
 }
 
@@ -47,18 +51,18 @@ fn setup_system(mut commands: Commands, assets_server: Res<AssetServer>) {
     let camera = OrthographicCameraBundle::new_2d();
     commands.insert_resource(GlobalAssets {
         spaceship: assets_server.load("spaceship.png"),
-    });
-
-    let background: Handle<Image> = assets_server.load("space.svg");
-    commands.spawn_bundle(SpriteBundle{
-        texture: background,
-        transform: Transform {
-            translation: Vec3::new(GAME_WIDTH, GAME_HEIGHT, 30.),
-            ..Default::default()
-        },
-        ..Default::default()
+        projectile2: assets_server.load("projectile2.png"),
     });
     commands.spawn_bundle(camera);
+
+    let background: Handle<Image> = assets_server.load("space.png");
+    let mut transform = Transform::from_xyz(0.0, 0.0, 0.0);
+    transform.scale = Vec3::new(1.8, 1.8, 1.0);
+    commands.spawn_bundle(SpriteBundle {
+        texture: background,
+        transform,
+        ..Default::default()
+    });
 }
 
 fn spawn_player_system(mut commands: Commands, assets: Res<GlobalAssets>) {
@@ -78,45 +82,73 @@ fn spawn_player_system(mut commands: Commands, assets: Res<GlobalAssets>) {
 
 fn movement_system(mut query: Query<(&mut Transform, &Velocity)>) {
     for (mut transform, velocity) in query.iter_mut() {
-        let (mut x, mut y) = (transform.translation.x, transform.translation.y);
-        x += velocity.x * BASE_SPEED * TIME_STEP;
-        y += velocity.y * BASE_SPEED * TIME_STEP;
-
-        if x > -GAME_WIDTH / 2. + WALL_WIDTH && x < GAME_WIDTH / 2. - WALL_WIDTH {
-            transform.translation.x = x;
-        }
-
-        if y > -GAME_HEIGHT / 2. + WALL_HEIGHT && y < GAME_HEIGHT / 2. - WALL_HEIGHT {
-            transform.translation.y = y;
-        }
+        transform.translation.x += velocity.x * BASE_SPEED * TIME_STEP;
+        transform.translation.y += velocity.y * BASE_SPEED * TIME_STEP;
     }
 }
 
 fn player_movement_system(
-    mut query: Query<&mut Velocity, With<Player>>,
+    mut query: Query<(&mut Velocity, &Transform), With<Player>>,
     input: Res<Input<KeyCode>>,
 ) {
-    if let Ok(mut velocity) = query.get_single_mut() {
+    if let Ok((mut velocity, transform)) = query.get_single_mut() {
+        let (mut x, mut y) = (velocity.x, velocity.y);
         if !input.pressed(KeyCode::Right)
             && !input.pressed(KeyCode::Left)
             && !input.pressed(KeyCode::Up)
             && !input.pressed(KeyCode::Down)
         {
-            velocity.x = 0.;
-            velocity.y = 0.;
+            x = 0.;
+            y = 0.;
         } else {
             if input.pressed(KeyCode::Right) {
-                velocity.x = 1.;
+                x = 1.;
             }
             if input.pressed(KeyCode::Left) {
-                velocity.x = -1.;
+                x = -1.;
             }
             if input.pressed(KeyCode::Up) {
-                velocity.y = 1.;
+                y = 1.;
             }
             if input.pressed(KeyCode::Down) {
-                velocity.y = -1.;
+                y = -1.;
             }
         }
+
+        let check_x = transform.translation.x + x;
+        let check_y = transform.translation.y + y;
+        if check_x < -GAME_WIDTH / 2. + WALL_WIDTH ||check_x > GAME_WIDTH / 2. - WALL_WIDTH {
+            x = 0.;
+        }
+
+        if check_y < -GAME_HEIGHT / 2. + WALL_HEIGHT || check_y > GAME_HEIGHT / 2. - WALL_HEIGHT {
+            y = 0.;
+        }
+        velocity.x = x;
+        velocity.y = y;
     }
 }
+
+fn spaw_player_projectile(
+    mut commands: Commands,
+    global_assets: Res<GlobalAssets>,
+    query_player: Query<&Transform, With<Player>>,
+    input: Res<Input<KeyCode>>,
+) {
+    if input.just_pressed(KeyCode::Space) {
+        let transform_player = query_player.single();
+        commands
+            .spawn_bundle(SpriteBundle {
+                texture: global_assets.projectile2.clone(),
+                transform: Transform {
+                    translation: transform_player.translation.clone(),
+                    scale: Vec3::new(0.05, 0.05, 0.),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .insert(PlayerProjectile)
+            .insert(Velocity { x: 0., y: 1. });
+    }
+}
+
