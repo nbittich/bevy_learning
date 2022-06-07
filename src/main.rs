@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 use rand::Rng;
 
@@ -11,15 +13,24 @@ pub const WALL_HEIGHT: f32 = 80.;
 pub const BASE_SPEED: f32 = 400.;
 pub const TIME_STEP: f32 = 1. / 60.;
 
-pub const MAX_ENNEMIES: usize = 3;
+pub const MAX_ENNEMIES: usize = 10;
 
 #[derive(Component)]
 pub struct Player;
 
 #[derive(Component)]
-pub struct Ennemy;
+pub struct Ennemy {
+    can_follow: bool,
+}
 #[derive(Component)]
 pub struct PlayerProjectile;
+
+#[derive(Component)]
+pub struct EnnemyProjectile;
+#[derive(Component)]
+pub struct ShootProjectile {
+    timer: Timer
+}
 
 #[derive(Component, Default)]
 pub struct Velocity {
@@ -34,6 +45,7 @@ pub struct SpawnEnnemyConfig {
 pub struct GlobalAssets {
     pub spaceship: Handle<Image>,
     pub alien: Handle<Image>,
+    pub projectile1: Handle<Image>,
     pub projectile2: Handle<Image>,
 }
 
@@ -56,6 +68,7 @@ fn main() {
         .add_system(spaw_player_projectile)
         .add_system(spawn_ennemy)
         .add_system(ennemy_movement)
+        .add_system(spaw_ennemy_projectile)
         .add_system(despawn_out_screen)
         .insert_resource(SpawnEnnemyConfig {
             timer: Timer::from_seconds(2., true),
@@ -68,6 +81,7 @@ fn setup_system(mut commands: Commands, assets_server: Res<AssetServer>) {
     commands.insert_resource(GlobalAssets {
         spaceship: assets_server.load("spaceship.png"),
         alien: assets_server.load("alien.png"),
+        projectile1: assets_server.load("projectile1.png"),
         projectile2: assets_server.load("projectile2.png"),
     });
     commands.spawn_bundle(camera);
@@ -161,7 +175,7 @@ fn spaw_player_projectile(
             .spawn_bundle(SpriteBundle {
                 texture: global_assets.projectile2.clone(),
                 transform: Transform {
-                    translation: transform_player.translation,
+                    translation: Vec3::new(transform_player.translation.x, transform_player.translation.y, 1.),
                     scale: Vec3::new(0.05, 0.05, 0.),
                     ..Default::default()
                 },
@@ -188,37 +202,76 @@ fn spawn_ennemy(
             .spawn_bundle(SpriteBundle {
                 texture: assets.alien.clone(),
                 transform: Transform {
-                    translation: Vec3::new(rand_w , GAME_HEIGHT, 10.),
+                    translation: Vec3::new(rand_w, GAME_HEIGHT / 2. - WALL_HEIGHT, 10.),
                     scale: Vec3::new(0.5, 0.5, 0.),
                     ..Default::default()
                 },
                 ..Default::default()
             })
-            .insert(Ennemy)
-            .insert(Velocity { x: 0., y: -0.3 });
+            .insert(Ennemy {
+                can_follow: rand::thread_rng().gen_bool(1. / 5.),
+            })
+            .insert(Velocity { x: 0., y: -0.2 })
+            .insert(ShootProjectile {
+                timer: Timer::new(Duration::from_millis(80 *6), true)
+            })
+            ;
     }
 }
 
 fn despawn_out_screen(mut commands: Commands, query_velocity: Query<(Entity, &Transform)>) {
     for (ent, transform) in query_velocity.iter() {
         if transform.translation.y < -GAME_HEIGHT || transform.translation.y > GAME_HEIGHT {
-            commands.entity(ent).despawn();
+            commands.entity(ent).despawn_recursive();
         }
     }
 }
 fn ennemy_movement(
     query_player: Query<&Transform, With<Player>>,
-    mut query_ennemy: Query<(&mut Velocity, &Transform), With<Ennemy>>,
+    mut query_ennemy: Query<(&Ennemy, &mut Velocity, &Transform)>,
 ) {
     let player_transform = query_player.single();
-    for (mut velocity, transform) in query_ennemy.iter_mut() {
-        if transform.translation.x.ceil() > player_transform.translation.x.ceil() {
-            velocity.x = -1.;
-        } else if transform.translation.x.ceil() < player_transform.translation.x.ceil() {
-            velocity.x = 1.;
+    for (ennemy, mut velocity, transform) in query_ennemy.iter_mut() {
+        if ennemy.can_follow {
+            let delta =
+                (transform.translation.x.round() - player_transform.translation.x.round()).abs();
+            if delta > 5. {
+                if transform.translation.x > player_transform.translation.x {
+                    velocity.x = -1.;
+                } else if transform.translation.x < player_transform.translation.x {
+                    velocity.x = 1.;
+                }
+            } else {
+                velocity.x = 0.;
+            }
         } else {
-            velocity.x = 0.;
+            velocity.x = rand::thread_rng().gen_range(-0.01..0.1);
         }
-        //  velocity.y = -rand::thread_rng().gen_range(0. .. 1.);
     }
+}
+
+fn spaw_ennemy_projectile(
+    time: Res<Time>, 
+    mut commands: Commands,
+    global_assets: Res<GlobalAssets>,
+    mut query_ennemy: Query<(&mut ShootProjectile, &Transform), With<Ennemy>>,
+) {
+    let delta = time.delta();
+    for (mut shoot_projectile, transform_ennemy) in query_ennemy.iter_mut() {
+        shoot_projectile.timer.tick(delta);
+        if shoot_projectile.timer.finished() {
+            commands
+            .spawn_bundle(SpriteBundle {
+                texture: global_assets.projectile1.clone(),
+                transform: Transform {
+                   translation: Vec3::new(transform_ennemy.translation.x, transform_ennemy.translation.y, 1.),
+                    scale: Vec3::new(0.05, 0.05, 0.),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .insert(EnnemyProjectile)
+            .insert(Velocity { x: 0., y: -1. });
+    }
+        }
 }
