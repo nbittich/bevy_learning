@@ -9,7 +9,8 @@ opt-level = 1
 opt-level = 3
 
 [dependencies]
-bevy = { version = "0.7.0", features = ["dynamic"] }
+bevy = { version = "0.7.0", features = ["dynamic", "wav", "mp3"] }
+bevy-inspector-egui = "0.11.0"
 bevy_svg = { version = "0.7", default-features = false, features = ["2d" ]}
 rand = "0.8.5"
 
