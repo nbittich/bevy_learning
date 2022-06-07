@@ -29,7 +29,7 @@ pub struct PlayerProjectile;
 pub struct EnnemyProjectile;
 #[derive(Component)]
 pub struct ShootProjectile {
-    timer: Timer
+    timer: Timer,
 }
 
 #[derive(Component, Default)]
@@ -175,7 +175,11 @@ fn spaw_player_projectile(
             .spawn_bundle(SpriteBundle {
                 texture: global_assets.projectile2.clone(),
                 transform: Transform {
-                    translation: Vec3::new(transform_player.translation.x, transform_player.translation.y, 1.),
+                    translation: Vec3::new(
+                        transform_player.translation.x,
+                        transform_player.translation.y,
+                        1.,
+                    ),
                     scale: Vec3::new(0.05, 0.05, 0.),
                     ..Default::default()
                 },
@@ -213,9 +217,8 @@ fn spawn_ennemy(
             })
             .insert(Velocity { x: 0., y: -0.2 })
             .insert(ShootProjectile {
-                timer: Timer::new(Duration::from_millis(80 *6), true)
-            })
-            ;
+                timer: Timer::new(Duration::from_millis(80 * 6), true),
+            });
     }
 }
 
@@ -251,7 +254,7 @@ fn ennemy_movement(
 }
 
 fn spaw_ennemy_projectile(
-    time: Res<Time>, 
+    time: Res<Time>,
     mut commands: Commands,
     global_assets: Res<GlobalAssets>,
     mut query_ennemy: Query<(&mut ShootProjectile, &Transform), With<Ennemy>>,
@@ -261,17 +264,21 @@ fn spaw_ennemy_projectile(
         shoot_projectile.timer.tick(delta);
         if shoot_projectile.timer.finished() {
             commands
-            .spawn_bundle(SpriteBundle {
-                texture: global_assets.projectile1.clone(),
-                transform: Transform {
-                   translation: Vec3::new(transform_ennemy.translation.x, transform_ennemy.translation.y, 1.),
-                    scale: Vec3::new(0.05, 0.05, 0.),
+                .spawn_bundle(SpriteBundle {
+                    texture: global_assets.projectile1.clone(),
+                    transform: Transform {
+                        translation: Vec3::new(
+                            transform_ennemy.translation.x,
+                            transform_ennemy.translation.y,
+                            1.,
+                        ),
+                        scale: Vec3::new(0.05, 0.05, 0.),
+                        ..Default::default()
+                    },
                     ..Default::default()
-                },
-                ..Default::default()
-            })
-            .insert(EnnemyProjectile)
-            .insert(Velocity { x: 0., y: -1. });
-    }
+                })
+                .insert(EnnemyProjectile)
+                .insert(Velocity { x: 0., y: -1. });
         }
+    }
 }
